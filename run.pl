@@ -31,9 +31,7 @@ my %cmds = (
 	'ROLLBACK' => sub ( ;@ ) { $datah->transaction_rollback( ) } ,
 ) ;
 
-$cmds{ 'END' } = sub ( ;@ ) { $cmds{ 'ROLLBACK' }->( ) ; exit } ;
-
-@SIG{ +qw{INT TERM} }  = $cmds{ 'ROLLBACK' } ;
+@SIG{ +qw{INT TERM} } = $cmds{ 'END' } = sub ( ;@ ) { $cmds{ 'ROLLBACK' }->( ) ; exit } ;
 
 while ( <$inph> ) {
 	warn( 'Invalid syntax' ) and next + ( ) unless m{$rx_cmd} ;
