@@ -5,7 +5,13 @@ use warnings ;
 use IO::Handle ;
 use Task151::Data ;
 
-my $datah = Task151::Data->new( 'path' => 'db' ) ;
+die q{первым аргументом укажите путь к папке с БД} unless @ARGV ;
+
+my ( $path ) = @ARGV ; # как вариант - db
+
+die qq{не удаётся получить доступ или создать папку "$path"} unless -d( $path ) && -w( _ ) || mkdir $path ;
+
+my $datah = Task151::Data->new( 'path' => $path ) ;
 my $inph = \*STDIN ;
 my $outh = \*STDOUT ;
 my $rx_cmd = qr{
