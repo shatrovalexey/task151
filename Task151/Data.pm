@@ -7,8 +7,12 @@ use Digest::SHA1 ;
 
 sub new( $;% ) { + bless { + splice( @_ , 1 ) , 'level' => 0 , } , shift }
 
-sub hash( $$@ ) { &Digest::SHA1::sha1_hex( join q{} , map &Digest::SHA1::sha1_hex( $_ ) , splice @_ , 1 ) }
+sub _hash( $$ ) { &Digest::SHA1::sha1_hex( $_[ 1 ] )  }
+sub hash( $$;@ ) {
+	my $self = shift ;
 
+	$self->_hash( join q{} , map $self->_hash( $_ ) , @_ )
+}
 sub node_name_joined( $$$$ ) { + join '-' , splice @_ , 1 , 3 }
 
 sub node_name( $$;@ ) {
@@ -25,14 +29,9 @@ sub node_path( $$$$ ) {
 	$self->get_path( $self->node_name( @_ ) )
 }
 
-sub rewrite( $$$ ) {
-	my $self = shift ;
-
-	IO::File->new( $self->node_path( @_ ) , &O_WRONLY( ) )->print( join "\n" , @_ )
-}
-
-sub get_read( $$ ) { + IO::File->new( splice( @_ , 1 , 1 ) , &O_RDONLY( ) ) }
-sub get_write( $$ ) { + IO::File->new( splice( @_ , 1 , 1 ) , &O_WRONLY( ) | &O_CREAT( ) ) }
+sub get_io( $$$ ) { + IO::File->new( @_[ 1 , 2 , ] )  }
+sub get_read( $$ ) { shift( @_ )->get_io( shift , &O_RDONLY( ) ) }
+sub get_write( $$ ) { shift( @_ )->get_io( shift , &O_WRONLY( ) | &O_CREAT( ) ) }
 
 sub get_value( $$ ) {
 	my $fh = shift( @_ )->get_read( shift ) ;
