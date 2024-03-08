@@ -9,19 +9,15 @@ sub new( $;% ) { + bless { + splice( @_ , 1 ) , 'level' => 0 , } , shift }
 
 sub hash( $$@ ) { &Digest::SHA1::sha1_hex( join q{} , map &Digest::SHA1::sha1_hex( $_ ) , splice @_ , 1 ) }
 
-sub node_name_joined( $$$ ) { + join '-' , splice @_ , 1 , 3 }
+sub node_name_joined( $$$$ ) { + join '-' , splice @_ , 1 , 3 }
 
 sub node_name( $$;@ ) {
 	my $self = shift ;
 
-	$self->node_name_joined( map( $self->hash( $_ ) , splice( @_ , 0 , 2 ) ) , @_ )
+	$self->node_name_joined( shift , map $self->hash( $_ ) , shift , shift )
 }
 
-sub get_path( $$;@ ) {
-	my $self = shift ;
-
-	join '/' , $self->{ 'path' } , @_
-}
+sub get_path( $$;@ ) { + join '/' , shift( @_ )->{ 'path' } , @_ }
 
 sub node_path( $$$$ ) {
 	my $self = shift ;
@@ -46,13 +42,7 @@ sub get_value( $$ ) {
 	$fh->getline( )
 }
 
-sub get_key( $$ ) {
-	my $key = shift( @_ )->get_read( shift )->getline( ) ;
-
-	chomp $key ;
-
-	$key
-}
+sub get_key( $$ ) { + chomp and return foreach shift( @_ )->get_read( shift )->getline( ) }
 
 sub get_value_by_key( $$ ) {
 	my $self = shift ;
@@ -66,40 +56,37 @@ sub get_keys_by_value( $$ ) {
 	map $self->get_key( $_ ) , $self->find_nodes_by_value( shift )
 }
 
-sub find_node( $$$ ) {
+sub find_node( $$$$ ) {
 	my $self = shift ;
 
-	glob $self->get_path( $self->node_name_joined( splice( @_ , 0 , 2 ) ) )
+	glob $self->get_path( $self->node_name_joined( @_ ) )
 }
 
 sub find_node_by_key( $$ ) {
 	my $self = shift ;
 
-	$self->order_nodes_by_current_level( $self->find_node( $self->hash( shift ) , '*' ) )
+	$self->order_nodes_by_current_level( $self->find_node( '*' , $self->hash( shift ) , '*' ) )
 }
 sub find_nodes_by_value( $$ ) {
 	my $self = shift ;
 
-	$self->order_nodes_by_current_level( $self->find_node( '*' , $self->hash( shift ) , '*' ) )
+	$self->order_nodes_by_current_level( $self->find_node( '*' , '*' , $self->hash( shift ) ) )
 }
 sub unset( $$ ) { + unlink shift( @_ )->find_node_by_key( shift ) }
 sub set( $$$ ) {
 	my ( $self , $key , $value ) = @_ ;
-	my @path = $self->find_node_by_key( $key ) ;
-	my ( $path ) = @path ;
+	my ( $path ) = $self->find_node_by_key( $key ) ;
 
-	unlink $path if $path && $path =~ m{^.+?/\w+\-\w+\-\Q$self->{ 'level' }\E$}usx ;
+	unlink $path if $path && $path =~ m{/\Q$self->{ 'level' }\E\-\w+\-\w+$}usx ;
 
-	$self->get_write( $self->node_path( $key , $value , $self->{ 'level' } ) )->print( join "\n" , $key , $value )
+	$self->get_write( $self->node_path( $self->{ 'level' } , $key , $value ) )->print( join "\n" , $key , $value )
 }
 sub count( $$ ) { scalar @{ [ shift( @_ )->find_nodes_by_value( shift ) ] } }
 
 sub order_nodes_by_current_level( $;@ ) {
 	my ( $self , @nodes , %result ) = @_ ;
 
-	foreach ( sort { [ $b =~ m{(\d+)$}usx ]->[ 0 ] <=> [ $a =~ m{(\d+)$}usx ]->[ 0 ] } @nodes ) {
-		$result{ $& } = $_ if m{/\w+}usx && ! exists( $result{ $& } )
-	}
+	m{/\d+\-(\w+)\-\w+$}usx && ! exists( $result{ $1 } ) and $result{ $1 } = $_ foreach sort { $b cmp $a } @nodes ;
 
 	values %result
 }
@@ -109,12 +96,12 @@ sub transaction_commit( $ ) {
 
 	return $self->{ 'level' } unless $self->{ 'level' } > 0 ;
 
-	foreach my $old_filename ( glob $self->get_path( $self->node_name_joined( '*' , $self->{ 'level' } ) ) ) {
-		my ( $key , $value ) = $old_filename =~ m{^.+?/(\w+)(\-\w+\-)\d+$}usx ;
+	foreach my $old_filename ( glob $self->get_path( $self->node_name_joined( $self->{ 'level' } , '*' ) ) ) {
+		my ( $key , $value ) = $old_filename =~ m{^.+?/\d+\-(\w+)(\-\w+)$}usx ;
 		my $level_new = $self->{ 'level' } - 1 ;
-		my $new_filename = $self->get_path( $key . $value . $level_new ) ;
+		my $new_filename = $self->get_path( $level_new . '-' . $key . $value ) ;
 
-		unlink glob $self->get_path( $self->node_name_joined( $key , '*' , $level_new ) ) ;
+		unlink glob $self->get_path( $self->node_name_joined( $level_new , $key , '*' ) ) ;
 
 		rename $old_filename , $new_filename
 	}
@@ -126,7 +113,7 @@ sub transaction_rollback( $ ) {
 
 	return $self->{ 'level' } unless $self->{ 'level' } > 0 ;
 
-	unlink glob $self->get_path( $self->node_name_joined( '*' , $self->{ 'level' } ) ) ;
+	unlink glob $self->get_path( $self->node_name_joined( $self->{ 'level' } , '*' ) ) ;
 
 	-- $self->{ 'level' }
 }
