@@ -83,10 +83,16 @@ sub set( $$$ ) {
 }
 sub count( $$ ) { scalar @{ [ shift( @_ )->find_nodes_by_value( shift ) ] } }
 
+sub explode_path( $$ ) { $_[ 1 ] =~ m{/(\d+)\-(\w+)\-(\w+)$}usx }
+
 sub order_nodes_by_current_level( $;@ ) {
 	my ( $self , @nodes , %result ) = @_ ;
 
-	m{/\d+\-(\w+)\-\w+$}usx && ! exists( $result{ $1 } ) and $result{ $1 } = $_ foreach sort { $b cmp $a } @nodes ;
+	foreach ( sort { $b cmp $a } @nodes ) {
+		my ( undef , $key ) = $self->explode_path( $_ ) or next + ( ) ;
+
+		$result{ $key } = $_ unless exists $result{ $key }
+	}
 
 	values %result
 }
@@ -97,9 +103,9 @@ sub transaction_commit( $ ) {
 	return $self->{ 'level' } unless $self->{ 'level' } > 0 ;
 
 	foreach my $old_filename ( glob $self->get_path( $self->node_name_joined( $self->{ 'level' } , '*' ) ) ) {
-		my ( $key , $value ) = $old_filename =~ m{^.+?/\d+\-(\w+)(\-\w+)$}usx ;
+		my ( undef , $key , $value ) = $self->explode_path( $old_filename ) ;
 		my $level_new = $self->{ 'level' } - 1 ;
-		my $new_filename = $self->get_path( $level_new . '-' . $key . $value ) ;
+		my $new_filename = $self->get_path( $self->node_name_joined( $level_new , $key , $value ) ) ;
 
 		unlink glob $self->get_path( $self->node_name_joined( $level_new , $key , '*' ) ) ;
 
